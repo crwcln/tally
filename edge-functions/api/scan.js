@@ -11,7 +11,7 @@ const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
 const PROMPT =
   'You are extracting purchasable items from the attached images (Amazon cart screenshots, receipts, or product photos). ' +
-  'List every distinct item with its per-unit price in USD as a number and its quantity (default 1). ' +
+  'List every distinct item with its EXACT per-unit price in USD as a number and its quantity (default 1). ' +
   'If a product photo has no visible price, give your best estimate of the typical retail price. ' +
   'Use short, clear item names. Respond with ONLY a JSON array like [{"name":"Item","price":12.99,"qty":1}].';
 
