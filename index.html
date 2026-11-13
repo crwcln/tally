@@ -212,6 +212,41 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   .dlg{padding-bottom:calc(18px + env(safe-area-inset-bottom))}
 }
 @media (prefers-reduced-motion:reduce){dialog,dialog[data-mounted="false"],dialog[data-leaving="true"]{transform:none!important}}
+
+/* payments */
+.cols,.row{grid-template-columns:1fr 100px 68px 112px 36px}
+.namerow{display:flex;align-items:center;gap:2px}
+.namerow input{flex:1;min-width:0}
+.chk{flex:none;width:36px;height:36px;border:0;background:none;padding:0;display:grid;place-items:center;border-radius:10px;cursor:pointer}
+.chk i{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-strong);display:grid;place-items:center;color:var(--on-text);
+  background:conic-gradient(var(--accent) calc(var(--p,0)*1%),transparent 0);transition:transform 160ms var(--ease-out),background-color 160ms ease,border-color 160ms ease}
+.chk i.full{background:var(--accent);border-color:var(--accent)}
+.chk i svg{width:12px;height:12px}
+.chk:active i{transform:scale(.88)}
+.linkline{padding-left:46px}
+.v.done{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--muted);font-weight:400}
+.paynote{display:inline-flex;align-items:center;gap:4px;border:0;background:none;font:inherit;font-size:12px;padding:3px 6px;margin-right:-6px;border-radius:6px;cursor:pointer;color:var(--muted);transition:transform 160ms var(--ease-out),background-color 150ms ease}
+.paynote svg{width:12px;height:12px}
+.paynote.part,.paynote.full{color:var(--accent);font-weight:500}
+.paynote:active{transform:scale(.96)}
+@media (hover:hover) and (pointer:fine){.paynote:hover{background:var(--surface-2)}}
+.total-card{display:grid;grid-template-areas:"label" "amount" "sub" "bar"}
+.total-card .label{grid-area:label}.total-card .amount{grid-area:amount}
+.sub2{grid-area:sub;font-size:13px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+.pbar{grid-area:bar;height:4px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:12px}
+.pbar i{display:block;height:100%;background:var(--accent);border-radius:4px;transform-origin:left;transform:scaleX(0);transition:transform 450ms var(--ease-out)}
+.pitem .p small.pd{color:var(--accent)}
+@media (max-width:560px){
+  main{padding-bottom:calc(136px + env(safe-area-inset-bottom))}
+  .total-card{grid-template-columns:1fr auto;grid-template-areas:"label amount" "sub amount";align-items:center;column-gap:12px;overflow:hidden;padding-top:14px}
+  .total-card .sub2{margin-top:0}
+  .total-card .pbar{position:absolute;top:0;left:0;right:0;margin:0;height:3px;border-radius:0}
+  .toast{bottom:calc(104px + env(safe-area-inset-bottom))}
+  .chk{width:44px;height:44px}
+  .linkline{padding-left:54px}
+  .paynote{font-size:13px;padding:6px}
+}
+@media (prefers-reduced-motion:reduce){.pbar i{transition:none}}
 @media (prefers-reduced-motion:reduce){
   .reveal,.row,.thumbs img{animation-name:fade;transform:none!important}
   .toast,.toast[data-mounted="false"],.toast[data-leaving="true"]{transform:translate(-50%,0)!important}
@@ -239,8 +274,10 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   </header>
 
   <section class="card total-card reveal" style="--d:1" aria-live="polite">
-    <div class="label">Total <span id="count"></span></div>
+    <div class="label"><span id="tlabel">Total</span> <span id="count"></span></div>
     <div class="amount" id="total">$0.00</div>
+    <div class="sub2" id="tsub" hidden></div>
+    <div class="pbar" id="pbar" hidden><i></i></div>
   </section>
 
   <form class="card pad add reveal" style="--d:2" id="addForm" autocomplete="off" novalidate>
@@ -289,6 +326,14 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   <h3>Open a shared cart</h3>
   <div class="copyrow"><label for="importIn">Paste a code or link</label><input type="text" id="importIn" placeholder="K7M2-9QXP or a link" autocapitalize="none" autocorrect="off" spellcheck="false"><button class="btn primary" type="button" id="importBtn">Open</button></div>
   <div class="status" id="importStatus" role="status"></div>
+</div></dialog>
+
+<dialog id="payDlg" data-mounted="false" aria-labelledby="payTitle"><div class="dlg">
+  <div class="dlg-head"><h2 id="payTitle">Record payment</h2><button type="button" class="x" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <p class="dlg-sub" id="payItem"></p>
+  <div class="copyrow"><label for="payAmt">Amount paid so far</label><input type="text" id="payAmt" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" enterkeyhint="done" autocomplete="off" placeholder="0.00"><button class="btn" type="button" id="payFull">Paid in full</button></div>
+  <p class="status" id="payInfo" role="status"></p>
+  <div class="dlg-actions"><button class="btn" type="button" id="payClear">Clear payment</button><button class="btn primary" type="button" id="paySave">Save</button></div>
 </div></dialog>
 
 <dialog id="previewDlg" data-mounted="false" aria-labelledby="pvTitle"><div class="dlg">
@@ -340,6 +385,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     tick(el,shown,v,up?650:300,function(x){shown=x;paintTotal(el,x)});
   }
 
+  var CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
   var LINK_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>';
   // Only http(s) links are ever kept; anything else (javascript:, data:) is dropped.
   function cleanUrl(u){
@@ -370,14 +416,43 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     }
     show();return d;
   }
-  function nameCell(input,it){var d=document.createElement('div');d.className='cell c-name';d.appendChild(input);d.appendChild(linkLine(it));return d}
+  // ---- payments: `paid` is the amount paid so far on an item (0 .. item total). The original price is never changed.
+  function itemTotal(it){return it.price*it.qty}
+  function paidOf(it){return Math.min(Math.max(0,Number(it.paid)||0),itemTotal(it))}
+  function isFull(it){var t=itemTotal(it);return t>0&&paidOf(it)>=t-0.005}
+  function setPaid(it,amt){it.paid=Math.round(Math.min(Math.max(0,amt),itemTotal(it))*100)/100;save();render()}
+  function checkBtn(it){
+    var b=document.createElement('button');b.type='button';b.className='chk';
+    var t=itemTotal(it),pd=paidOf(it),full=isFull(it);
+    b.setAttribute('role','checkbox');b.setAttribute('aria-checked',full?'true':(pd>0?'mixed':'false'));
+    b.setAttribute('aria-label',(full?'Mark unpaid: ':'Mark paid: ')+it.name);
+    var i=document.createElement('i');i.style.setProperty('--p',t>0?Math.round(pd/t*100):0);
+    if(full){i.className='full';i.innerHTML=CHECK}
+    b.appendChild(i);b.onclick=function(){setPaid(it,full?0:t)};
+    return b;
+  }
+  function payNote(it){
+    var b=document.createElement('button');b.type='button';b.className='paynote';
+    var t=itemTotal(it),pd=paidOf(it);
+    if(pd<=0){b.textContent='Record payment'}
+    else if(isFull(it)){b.classList.add('full');b.innerHTML=CHECK;b.appendChild(document.createTextNode('Paid in full'))}
+    else{b.classList.add('part');b.textContent='Paid '+fmt.format(pd);b.title=fmt.format(t-pd)+' left to pay'}
+    b.setAttribute('aria-label','Edit payment for '+it.name);
+    b.onclick=function(){openPay(it)};
+    return b;
+  }
+  function nameCell(input,it){
+    var d=document.createElement('div');d.className='cell c-name';
+    var r=document.createElement('div');r.className='namerow';r.appendChild(checkBtn(it));r.appendChild(input);
+    d.appendChild(r);d.appendChild(linkLine(it));return d;
+  }
 
   // ---- share: the cart is packed into a code (deflate + base64url). The link is just the code in the URL hash.
   function b64u(b){var s='';for(var i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
   function unb64u(t){t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';var s=atob(t),b=new Uint8Array(s.length);for(var i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b}
   async function pipe(bytes,stream){return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer())}
   async function pack(list){
-    var json=JSON.stringify({v:1,i:list.map(function(i){var a=[i.name,i.price,i.qty];if(i.url)a.push(i.url);return a})});
+    var json=JSON.stringify({v:1,i:list.map(function(i){var a=[i.name,i.price,i.qty],pd=paidOf(i);if(i.url||pd>0)a.push(i.url||'');if(pd>0)a.push(pd);return a})});
     var bytes=new TextEncoder().encode(json);
     if(window.CompressionStream)return 'T1.'+b64u(await pipe(bytes,new CompressionStream('deflate-raw')));
     return 'T0.'+b64u(bytes);
@@ -397,7 +472,8 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     if(!data||!Array.isArray(data.i)||!data.i.length)throw new Error('That cart is empty.');
     return data.i.slice(0,100).map(function(a){
       a=Array.isArray(a)?a:[];
-      return {name:String(a[0]||'Item').slice(0,120),price:Math.min(1e9,Math.max(0,num(a[1])||0)),qty:Math.min(999,Math.max(1,parseInt(a[2])||1)),url:cleanUrl(a[3])};
+      var pr=Math.min(1e9,Math.max(0,num(a[1])||0)),q=Math.min(999,Math.max(1,parseInt(a[2])||1));
+      return {name:String(a[0]||'Item').slice(0,120),price:pr,qty:q,url:cleanUrl(a[3]),paid:Math.min(pr*q,Math.max(0,num(a[4])||0))};
     });
   }
 
@@ -470,18 +546,25 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
       var sv=document.createElement('span');sv.className='v';
       var rowTotal=it.price*it.qty;
       if(isNew)tick(sv,0,rowTotal,550,function(v){sv.textContent=fmt.format(v)});else sv.textContent=fmt.format(rowTotal);
+      if(isFull(it))sv.className='v done';
+      var subWrap=document.createElement('div');subWrap.appendChild(sv);subWrap.appendChild(payNote(it));
       var x=document.createElement('button');x.type='button';x.className='x';x.innerHTML=X;x.setAttribute('aria-label','Remove '+it.name);
       x.onclick=function(){
         row.dataset.leaving='true';
         setTimeout(function(){mutate(function(){items=items.filter(function(o){return o!==it})},'Removed “'+(it.name.length>24?it.name.slice(0,24)+'…':it.name)+'”')},reduce?0:130);
       };
-      [nameCell(n,it),cell('c-price','Price',p),cell('c-qty','Qty',q),cell('sub','Subtotal',sv),x].forEach(function(c){row.appendChild(c)});
+      [nameCell(n,it),cell('c-price','Price',p),cell('c-qty','Qty',q),cell('sub','Subtotal',subWrap),x].forEach(function(c){row.appendChild(c)});
       body.appendChild(row);
     });
     if(fresh.length){void body.offsetWidth;fresh.forEach(function(r){r.dataset.mounted='true'})}
     newIds={};animateNext=true;
-    var tot=items.reduce(function(a,b){return a+b.price*b.qty},0),units=items.reduce(function(a,b){return a+b.qty},0);
-    setTotal(tot);
+    var tot=items.reduce(function(a,b){return a+itemTotal(b)},0),units=items.reduce(function(a,b){return a+b.qty},0);
+    var paid=items.reduce(function(a,b){return a+paidOf(b)},0),left=Math.max(0,tot-paid),anyPaid=paid>0.004;
+    setTotal(anyPaid?left:tot);
+    $('tlabel').textContent=!anyPaid?'Total':(left<0.005?'All paid':'Left to pay');
+    $('tsub').hidden=!anyPaid;$('pbar').hidden=!anyPaid;
+    $('tsub').textContent='Total '+fmt.format(tot)+' · Paid '+fmt.format(paid);
+    $('pbar').firstElementChild.style.transform='scaleX('+(tot>0?Math.min(1,paid/tot):0)+')';
     $('count').textContent=units?'· '+units+' item'+(units>1?'s':''):'';
     $('empty').style.display=items.length?'none':'block';
     document.querySelector('.cols').style.display=items.length?'':'none';
@@ -559,7 +642,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   // ---- dialogs ----
   function openDlg(d){d.dataset.mounted='false';d.showModal();void d.offsetWidth;d.dataset.mounted='true'}
   function closeDlg(d){if(!d.open)return;d.dataset.leaving='true';setTimeout(function(){d.close()},reduce?0:140)}
-  ['shareDlg','previewDlg'].forEach(function(id){
+  ['shareDlg','previewDlg','payDlg'].forEach(function(id){
     var d=$(id);
     d.addEventListener('close',function(){delete d.dataset.leaving;d.dataset.mounted='false'});
     d.addEventListener('click',function(e){if(e.target===d)closeDlg(d)});
@@ -609,6 +692,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
       if(it.url)t.appendChild(anchor(it.url,'pl'));
       var pr=document.createElement('div');pr.className='p';pr.textContent=fmt.format(it.price*it.qty);
       if(it.qty>1){var sm=document.createElement('small');sm.textContent=it.qty+' × '+fmt.format(it.price);pr.appendChild(sm)}
+      if(it.paid>0){var pm=document.createElement('small');pm.className='pd';pm.textContent='Paid '+fmt.format(it.paid);pr.appendChild(pm)}
       r.appendChild(t);r.appendChild(pr);box.appendChild(r);
     });
     $('pvReplace').hidden=!items.length;
@@ -618,7 +702,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     var list=pending;if(!list)return;closeDlg($('previewDlg'));
     mutate(function(){
       if(replace)items=[];
-      list.forEach(function(o){var it={id:Date.now()+Math.random(),name:o.name,price:o.price,qty:o.qty,url:o.url};items.push(it);newIds[it.id]=true});
+      list.forEach(function(o){var it={id:Date.now()+Math.random(),name:o.name,price:o.price,qty:o.qty,url:o.url,paid:o.paid||0};items.push(it);newIds[it.id]=true});
     },(replace?'Loaded ':'Added ')+list.length+' item'+(list.length>1?'s':'')+' from shared cart');
   }
   $('pvAdd').onclick=function(){bring(false)};
@@ -635,6 +719,27 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     try{showPreview(await resolve(h))}catch(e){toast(e.message)}
   }
   window.addEventListener('hashchange',checkHash);
+
+  // ---- payment dialog ----
+  var payItem=null;
+  function updatePayInfo(){
+    if(!payItem)return;
+    var t=itemTotal(payItem),v=num($('payAmt').value)||0;
+    $('payInfo').textContent=v>t+0.004?'That’s more than the item’s cost, so it will be capped at '+fmt.format(t)+'.':fmt.format(Math.max(0,t-v))+' left to pay of '+fmt.format(t)+'.';
+  }
+  function openPay(it){
+    payItem=it;var pd=paidOf(it);
+    $('payItem').textContent=it.name+' · original '+fmt.format(itemTotal(it));
+    $('payAmt').value=pd>0?String(+pd.toFixed(2)):'';
+    updatePayInfo();openDlg($('payDlg'));
+    setTimeout(function(){var i=$('payAmt');i.focus();try{i.select()}catch(e){}},60);
+  }
+  function savePay(){if(!payItem)return;setPaid(payItem,num($('payAmt').value)||0);closeDlg($('payDlg'))}
+  $('payAmt').addEventListener('input',function(){cleanDec(this);updatePayInfo()});
+  $('payAmt').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();savePay()}});
+  $('payFull').onclick=function(){if(payItem){$('payAmt').value=String(+itemTotal(payItem).toFixed(2));updatePayInfo()}};
+  $('payClear').onclick=function(){$('payAmt').value='';savePay()};
+  $('paySave').onclick=savePay;
 
   $('price').addEventListener('input',function(){cleanDec(this)});
   $('qty').addEventListener('input',function(){cleanInt(this)});
