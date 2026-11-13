@@ -247,6 +247,19 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   .paynote{font-size:13px;padding:6px}
 }
 @media (prefers-reduced-motion:reduce){.pbar i{transition:none}}
+
+/* select items -> see what you owe */
+.selbox{flex:none;width:36px;height:36px;border:0;background:none;padding:0;display:grid;place-items:center;border-radius:10px;cursor:pointer}
+.selbox i{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line-strong);display:grid;place-items:center;color:var(--on-text);
+  transition:transform 160ms var(--ease-out),background-color 160ms ease,border-color 160ms ease}
+.selbox i.on{background:var(--accent);border-color:var(--accent)}
+.selbox i svg{width:12px;height:12px}
+.selbox:active i{transform:scale(.88)}
+.row{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out),background-color 150ms ease}
+.row[data-sel="true"]{background:var(--accent-soft)}
+.total-card{transition:box-shadow 200ms var(--ease-out),border-color 200ms ease}
+.total-card.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
+@media (max-width:560px){.selbox{width:44px;height:44px}}
 @media (prefers-reduced-motion:reduce){
   .reveal,.row,.thumbs img{animation-name:fade;transform:none!important}
   .toast,.toast[data-mounted="false"],.toast[data-leaving="true"]{transform:translate(-50%,0)!important}
@@ -273,7 +286,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     <span class="tagline">Know what your cart costs</span>
   </header>
 
-  <section class="card total-card reveal" style="--d:1" aria-live="polite">
+  <section class="card total-card reveal" style="--d:1" id="totalCard" aria-live="polite">
     <div class="label"><span id="tlabel">Total</span> <span id="count"></span></div>
     <div class="amount" id="total">$0.00</div>
     <div class="sub2" id="tsub" hidden></div>
@@ -304,7 +317,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   </section>
 
   <section class="card reveal" style="--d:4">
-    <div class="list-head"><h2>Items</h2><div class="lh-actions"><button class="btn ghost strong" id="share" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>Share</button><button class="btn ghost" id="clear" type="button">Clear all</button></div></div>
+    <div class="list-head"><h2 id="listTitle">Items</h2><div class="lh-actions" id="normalActions"><button class="btn ghost strong" id="share" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>Share</button><button class="btn ghost" id="selectBtn" type="button">Select</button><button class="btn ghost" id="clear" type="button">Clear all</button></div><div class="lh-actions" id="selActions" hidden><button class="btn ghost strong" id="selAll" type="button">Select all</button><button class="btn ghost" id="selDone" type="button">Done</button></div></div>
     <div class="cols" aria-hidden="true"><span>Item</span><span class="r">Price</span><span class="r">Qty</span><span class="r">Subtotal</span><span></span></div>
     <div id="rows" role="list"></div>
     <div class="empty" id="empty"><b>Nothing here yet</b>Add an item above or scan a cart.</div>
@@ -345,7 +358,7 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
 
 <script>
 (function(){
-  var items=[], images=[], newIds={}, animateNext=true, shown=null, toastEl=null, toastTimer=0;
+  var selMode=false, sel=new Set(), items=[], images=[], newIds={}, animateNext=true, shown=null, toastEl=null, toastTimer=0;
   var $=function(id){return document.getElementById(id)};
   var fmt=new Intl.NumberFormat(undefined,{style:'currency',currency:'USD'});
   var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -441,9 +454,18 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     b.onclick=function(){openPay(it)};
     return b;
   }
+  function selBtn(it){
+    var b=document.createElement('button');b.type='button';b.className='selbox';
+    var on=sel.has(it.id);
+    b.setAttribute('role','checkbox');b.setAttribute('aria-checked',on?'true':'false');b.setAttribute('aria-label',(on?'Deselect ':'Select ')+it.name);
+    var i=document.createElement('i');if(on){i.className='on';i.innerHTML=CHECK}
+    b.appendChild(i);
+    b.onclick=function(){if(sel.has(it.id))sel.delete(it.id);else sel.add(it.id);render()};
+    return b;
+  }
   function nameCell(input,it){
     var d=document.createElement('div');d.className='cell c-name';
-    var r=document.createElement('div');r.className='namerow';r.appendChild(checkBtn(it));r.appendChild(input);
+    var r=document.createElement('div');r.className='namerow';r.appendChild(selMode?selBtn(it):checkBtn(it));r.appendChild(input);
     d.appendChild(r);d.appendChild(linkLine(it));return d;
   }
 
@@ -531,9 +553,12 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   }
 
   function render(){
+    sel.forEach(function(id){if(!items.some(function(o){return o.id===id}))sel.delete(id)});
+    if(!items.length)selMode=false;
     var body=$('rows');body.innerHTML='';var fresh=[],order=0;
     items.forEach(function(it){
       var row=document.createElement('div');row.className='row';row.setAttribute('role','listitem');
+      if(selMode&&sel.has(it.id))row.dataset.sel='true';
       var isNew=!!newIds[it.id];
       if(isNew&&animateNext&&!reduce){row.dataset.mounted='false';row.style.setProperty('--i',order++);fresh.push(row)}
       var n=document.createElement('input');n.type='text';n.className='nm';n.value=it.name;
@@ -558,14 +583,20 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
     });
     if(fresh.length){void body.offsetWidth;fresh.forEach(function(r){r.dataset.mounted='true'})}
     newIds={};animateNext=true;
-    var tot=items.reduce(function(a,b){return a+itemTotal(b)},0),units=items.reduce(function(a,b){return a+b.qty},0);
-    var paid=items.reduce(function(a,b){return a+paidOf(b)},0),left=Math.max(0,tot-paid),anyPaid=paid>0.004;
-    setTotal(anyPaid?left:tot);
-    $('tlabel').textContent=!anyPaid?'Total':(left<0.005?'All paid':'Left to pay');
-    $('tsub').hidden=!anyPaid;$('pbar').hidden=!anyPaid;
-    $('tsub').textContent='Total '+fmt.format(tot)+' · Paid '+fmt.format(paid);
+    var picked=selMode&&sel.size>0,base=picked?items.filter(function(o){return sel.has(o.id)}):items;
+    var tot=base.reduce(function(a,b){return a+itemTotal(b)},0),units=base.reduce(function(a,b){return a+b.qty},0);
+    var paid=base.reduce(function(a,b){return a+paidOf(b)},0),left=Math.max(0,tot-paid),anyPaid=paid>0.004;
+    setTotal(picked||anyPaid?left:tot);
+    $('tlabel').textContent=picked?(left<0.005?'Selected: all paid':'Owe for '+base.length+' selected'):(!anyPaid?'Total':(left<0.005?'All paid':'Left to pay'));
+    $('tsub').hidden=!(anyPaid||picked);$('pbar').hidden=!anyPaid;
+    $('tsub').textContent=(picked?'Selected ':'Total ')+fmt.format(tot)+' · Paid '+fmt.format(paid);
     $('pbar').firstElementChild.style.transform='scaleX('+(tot>0?Math.min(1,paid/tot):0)+')';
-    $('count').textContent=units?'· '+units+' item'+(units>1?'s':''):'';
+    $('totalCard').classList.toggle('sel',picked);
+    $('listTitle').textContent=selMode?(sel.size?sel.size+' selected':'Tap items to select'):'Items';
+    $('normalActions').hidden=selMode;$('selActions').hidden=!selMode;
+    $('selectBtn').hidden=!items.length;
+    $('selAll').textContent=sel.size===items.length?'Deselect all':'Select all';
+    $('count').textContent=(units&&!picked)?'· '+units+' item'+(units>1?'s':''):'';
     $('empty').style.display=items.length?'none':'block';
     document.querySelector('.cols').style.display=items.length?'':'none';
     $('clear').hidden=!items.length;
@@ -741,6 +772,10 @@ dialog[data-mounted="false"]::backdrop,dialog[data-leaving="true"]::backdrop{opa
   $('payClear').onclick=function(){$('payAmt').value='';savePay()};
   $('paySave').onclick=savePay;
 
+  $('selectBtn').onclick=function(){selMode=true;sel.clear();render()};
+  $('selDone').onclick=function(){selMode=false;sel.clear();render()};
+  $('selAll').onclick=function(){if(sel.size===items.length)sel.clear();else items.forEach(function(o){sel.add(o.id)});render()};
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&selMode&&!document.querySelector('dialog[open]')){selMode=false;sel.clear();render()}});
   $('price').addEventListener('input',function(){cleanDec(this)});
   $('qty').addEventListener('input',function(){cleanInt(this)});
   animateNext=false;render();checkHash();
